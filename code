@@ -1,0 +1,148 @@
+import pandas as pd
+import numpy as np
+import tensorflow as tf
+from tensorflow.keras import layers, models, regularizers
+import keras, os
+from keras.layers import BatchNormalization
+from keras.layers import Dense, Conv2D, MaxPool2D, Flatten
+from keras.optimizers import Adam
+from keras.preprocessing.image import ImageDataGenerator
+from keras.models import Sequential
+import cv2
+import os
+import matplotlib.pyplot as plt
+from keras.optimizers import Adam
+from keras.callbacks import LearningRateScheduler
+from tensorflow.keras.optimizers.legacy import Adam
+read_image_train = cv2.imread(r'C:\Users\Ammad Jabbar\Downloads\Compressed\computervision\ammad\Dataset\train\fear\5711953.png')
+read_image_train.shape
+img_width, img_height = 48, 48
+batch_size = 64
+train_datagen = ImageDataGenerator(
+    rescale=1./255,
+    shear_range=0.1,
+    rotation_range=10,
+    zoom_range=0.1,
+    width_shift_range=0.1,
+    height_shift_range=0.1,
+    vertical_flip=True,
+    fill_mode='nearest'
+)
+validation_datagen = ImageDataGenerator(rescale=1./255)
+train_generator = train_datagen.flow_from_directory(
+    'C:\\Users\\Ammad Jabbar\\Downloads\\Compressed\\computervision\\ammad\\Dataset\\train'
+,
+    target_size=(img_width, img_height),
+    batch_size=batch_size,
+    color_mode="rgb",
+    class_mode='categorical',
+    shuffle=True  # Use shuffle for training data
+)
+validation_generator = validation_datagen.flow_from_directory(
+    'C:\\Users\\Ammad Jabbar\\Downloads\\Compressed\\computervision\\ammad\\Dataset\\test',
+    target_size=(img_width, img_height),
+    batch_size=batch_size,
+    color_mode="rgb",
+    class_mode='categorical',
+    shuffle=True  # Use shuffle for validation data
+)
+model = models.Sequential()
+model.add(layers.Conv2D(32, (3, 3), padding='valid', activation='relu', input_shape=(img_width, img_height, 3)))
+model.add(BatchNormalization())
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Dropout(0.15))
+
+model.add(layers.Conv2D(64, (3, 3), padding='valid', activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+
+model.add(layers.Conv2D(128, (3, 3), padding='valid', activation='relu'))
+model.add(layers.MaxPooling2D((2, 2)))
+model.add(layers.Dropout(0.25))
+
+model.add(layers.Flatten())
+model.add(layers.Dense(1024, activation='relu'))
+model.add(layers.Dropout(0.5))
+model.add(layers.Dense(7, activation='softmax'))
+
+model.summary()
+model.compile(
+    optimizer=Adam(learning_rate=0.0001, decay=1e-6),
+    loss='categorical_crossentropy',
+    metrics=['accuracy']
+)
+num_train_samples = len(train_generator.filenames)
+steps_per_epoch = num_train_samples // batch_size
+
+epochs = 50
+
+train_model = model.fit(
+    train_generator,
+    steps_per_epoch=steps_per_epoch,
+    epochs=epochs,
+    validation_data=validation_generator
+)
+test_loss, test_acc =model.evaluate(validation_generator, verbose=2)
+
+print('\nTest accuracy:', test_acc)
+
+model.save('detection_emotions_model_50epochs.keras')
+loss = train_model.history['loss']
+val_loss = train_model.history['val_loss']
+
+epochs = range(1, len(loss) + 1)
+
+plt.plot(epochs, loss, 'y', label='Training loss')
+plt.plot(epochs, val_loss, 'r', label='Validation loss')
+plt.title('Training and validation loss')
+plt.xlabel('Epochs')
+plt.ylabel('Loss')
+plt.legend()
+plt.show()
+
+acc = train_model.history['accuracy']
+
+val_acc = train_model.history['val_accuracy']
+
+
+plt.plot(epochs, acc, 'y', label='Training acc')
+plt.plot(epochs, val_acc, 'r', label='Validation acc')
+plt.title('Training and validation accuracy')
+plt.xlabel('Epochs')
+plt.ylabel('Accuracy')
+plt.legend()
+plt.show()
+from keras.models import load_model
+
+my_model = load_model('detection_emotions_model_50epochs.keras', compile=False)
+
+
+test_img, test_lbl = validation_generator.__next__()
+predictions=my_model.predict(test_img)
+
+predictions = np.argmax(predictions, axis=1)
+test_labels = np.argmax(test_lbl, axis=1)
+from sklearn import metrics
+import seaborn as sns
+import random
+print ("Accuracy = ", metrics.accuracy_score(test_labels, predictions))
+
+from sklearn.metrics import confusion_matrix
+
+cm = confusion_matrix(test_labels, predictions)
+
+import seaborn as sns
+sns.heatmap(cm, annot=True)
+
+class_labels=['Angry','Disgust', 'Fear', 'Happy','Neutral','Sad','Surprise']
+
+n=random.randint(0, test_img.shape[1] - 1)
+image = test_img[n]
+orig_labl = class_labels[test_labels[n]]
+pred_labl = class_labels[predictions[n]]
+plt.imshow(image[:,:,0], cmap='gray')
+plt.title("Original label is:"+orig_labl+" Predicted is: "+ pred_labl)
+plt.show()
+model_json=model.to_json()
+with open("model_emotions.json","w")as json_file:
+ json_file.write(model_json)
+model.save_weights('model_emotions.h5')
